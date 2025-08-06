@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -shared -Wl,-soname,libp2p_runtime.so -o libp2p_runtime.so CMakeFiles/p2p_runtime.dir/src/p2p.cc.o CMakeFiles/p2p_runtime.dir/src/pcie_rw.c.o  /usr/lib/x86_64-linux-gnu/libcuda.so 

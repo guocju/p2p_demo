@@ -1,0 +1,52 @@
+#ifndef GPUCTl_H
+#define GPUCTL_H
+
+//#include "nv-p2p.h"
+//-----------------------------------------------------------------------------
+// for boundary alignment requirement
+#define GPU_BOUND_SHIFT 16
+#define GPU_BOUND_SIZE ((u64)1 << GPU_BOUND_SHIFT)
+#define GPU_BOUND_OFFSET (GPU_BOUND_SIZE-1)
+#define GPU_BOUND_MASK (~GPU_BOUND_OFFSET)
+#define DEVICE_NAME "nvidia-fs"
+
+//-----------------------------------------------------------------------------
+
+struct gpudma_lock_t {
+    void*    handle;
+    uint64_t addr;
+    uint64_t size;
+    size_t   page_count;
+    int byp;
+    uint64_t *dma_addrs;   // 存储多个物理地址
+    size_t   *dma_lengths; // 存储每个地址对应的长度
+    uint64_t fpga_addr; // FPGA端目标地址
+};
+
+
+
+//-----------------------------------------------------------------------------
+
+struct gpudma_unlock_t {
+    void*    handle;
+};
+ 
+//-----------------------------------------------------------------------------
+
+struct gpudma_state_t {
+    void*       handle;
+    size_t      page_count;
+    size_t      page_size;
+    uint64_t    pages[1];
+};
+
+//-----------------------------------------------------------------------------
+
+int say_hello(void);
+uint64_t nv_p2p_get(struct gpudma_lock_t *param, struct pci_dev *pdev, struct nvidia_p2p_dma_mapping **dma_mapping);
+void nv_p2p_free(void);
+#define nvfs_msg(KRNLVL, FMT, ARGS...) printk(KRNLVL DEVICE_NAME ":" FMT, ## ARGS)
+#define nvfs_err(FMT, ARGS...)                               \
+    nvfs_msg(KERN_ERR, FMT, ## ARGS)
+
+#endif

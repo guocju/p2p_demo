@@ -1,0 +1,3 @@
+/home/inspur/P2P/p2p_demo/utils/build/CMakeFiles/p2p_runtime.dir
+/home/inspur/P2P/p2p_demo/utils/build/CMakeFiles/edit_cache.dir
+/home/inspur/P2P/p2p_demo/utils/build/CMakeFiles/rebuild_cache.dir

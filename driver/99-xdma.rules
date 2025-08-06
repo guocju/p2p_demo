@@ -1,0 +1,1 @@
+SUBSYSTEM=="xdma", KERNEL=="xdma0_*", OWNER="inspur", MODE="0660"

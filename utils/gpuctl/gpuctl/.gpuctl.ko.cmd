@@ -1,0 +1,1 @@
+cmd_/home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl.ko := ld -r  -m elf_x86_64 -z noexecstack   --build-id=sha1  -T scripts/module.lds -o /home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl.ko /home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl.o /home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl.mod.o;  true

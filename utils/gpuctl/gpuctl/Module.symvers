@@ -1,0 +1,3 @@
+0xbe47fc03	nv_p2p_get	/home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl	EXPORT_SYMBOL	
+0xfa244fe1	nv_p2p_free	/home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl	EXPORT_SYMBOL	
+0xb6b11acb	say_hello	/home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl	EXPORT_SYMBOL	

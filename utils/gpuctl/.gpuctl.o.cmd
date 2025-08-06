@@ -1,0 +1,1 @@
+cmd_/home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl.o := ld  -m elf_x86_64 -z noexecstack     -r -o /home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/gpuctl.o /home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/./src/gpuctl.o /home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/./src/nvfs-p2p.o

@@ -1,0 +1,225 @@
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include "gpuctl.h"
+#include "cdev_sgdma.h"
+#include <dirent.h>
+#include <signal.h>
+#include <pthread.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/uio.h>
+#include <linux/ioctl.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <time.h>
+
+#define N 1024 * 128
+#define CHECK_BLOCK_SIZE 256
+
+// 内核参数结构体
+typedef struct {
+    int cached_val;
+    int mem_val;
+    int is_consistent;
+} CacheCheckResult;
+typedef struct xdma_data_ioctl{
+  int *value;
+  size_t count;
+} dma_read;
+
+typedef struct parallel_read_arg{
+  int fd;
+  unsigned int cmd;
+  gpudma_lock_t *data;
+} parallel_read;
+
+typedef struct parallel_write_arg{
+  int fd;
+  int *value;
+  size_t size;
+} parallel_write;
+
+void* write_test(void* p){
+  parallel_write* datas;
+  datas = (parallel_write*)p;
+  write(datas->fd, datas->value, datas->size);
+  return NULL;
+}
+
+void* read_test(void* p){
+  parallel_read* datas;
+  datas = (parallel_read*)p;
+  ioctl(datas->fd, datas->cmd, datas->data);
+  return NULL;
+}
+
+
+// GPU缓存检查内核
+__global__ void check_cache_consistency(int *data, CacheCheckResult *results) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= 1) return; // 仅第一个线程执行检查
+
+    // 从缓存读取
+    int cached_val;
+    asm volatile ("ld.global.ca.s32 %0, [%1];" : "=r"(cached_val) : "l"(data));
+
+    // 从显存直接读取
+    int mem_val;
+    asm volatile ("ld.global.cg.s32 %0, [%1];" : "=r"(mem_val) : "l"(data));
+
+    results[0].cached_val = cached_val;
+    results[0].mem_val = mem_val;
+    results[0].is_consistent = (cached_val == mem_val) ? 1 : 0;
+}
+
+// 辅助函数
+void checkError(CUresult status);
+bool wasError(CUresult status);
+void verify_cache_consistency(int *gpu_ptr, CUstream stream);
+
+int main() {
+    // 初始化XDMA设备
+    int fd_o = open("/dev/xdma0_h2c_1", O_WRONLY);
+    int fd_i = open("/dev/xdma0_c2h_1", O_RDONLY);
+    if (fd_o < 0 || fd_i < 0) {
+        printf("Failed to open XDMA devices\n");
+        return -1;
+    }
+
+    // CUDA初始化
+    CUcontext context;
+    CUdevice device;
+    checkError(cuInit(0));
+    checkError(cuDeviceGet(&device, 0));
+    checkError(cuCtxCreate(&context, 0, device));
+
+    // 分配GPU内存
+    size_t n_byte = N * sizeof(int);
+    CUdeviceptr dptr;
+    checkError(cuMemAlloc(&dptr, n_byte));
+    printf("GPU Memory allocated at 0x%llx\n", (unsigned long long)dptr);
+
+    // 分配结果缓冲区
+    CacheCheckResult *h_results = (CacheCheckResult*)malloc(sizeof(CacheCheckResult));
+    CUdeviceptr d_results;
+    checkError(cuMemAlloc(&d_results, sizeof(CacheCheckResult)));
+
+    // 初始化测试数据
+    int *h_data = (int*)malloc(n_byte);
+    for(int i=0; i<N; i++) h_data[i] = rand();
+
+    // 第一次传输：Host->FPGA->GPU
+    gpudma_lock_t lock;
+    parallel_write write_data;
+    parallel_read read_data;
+    lock.addr = dptr;
+    lock.size = n_byte;
+    lock.byp = 0;
+    write_data = { fd_o, &arr1[0], n_byte}; //HtoFPGA
+    read_data = { fd_i, IOCTL_XDMA_GPU_READ, &lock};
+  
+    write(fd_o, h_data, n_byte);       // Host到FPGA
+    ioctl(fd_i, IOCTL_XDMA_GPU_READ, &lock); // FPGA到GPU
+    
+    // 验证第一次传输后的缓存一致性
+    verify_cache_consistency((int*)dptr, 0);
+    cuMemcpyDtoH(h_results, d_results, sizeof(CacheCheckResult));
+    printf("After first transfer: Cached=%d, Memory=%d, Consistent=%s\n",
+           h_results->cached_val, h_results->mem_val,
+           h_results->is_consistent ? "Yes" : "No");
+
+    // 第二次传输：更新数据
+    for(int i=0; i<N; i++) h_data[i] += 1000;
+    write(fd_o, h_data, n_byte);
+    ioctl(fd_i, IOCTL_XDMA_GPU_READ, &lock);
+
+    // 验证第二次传输后的缓存一致性
+    verify_cache_consistency((int*)dptr, 0);
+    cuMemcpyDtoH(h_results, d_results, sizeof(CacheCheckResult));
+    printf("After second transfer: Cached=%d, Memory=%d, Consistent=%s\n",
+           h_results->cached_val, h_results->mem_val,
+           h_results->is_consistent ? "Yes" : "No");
+
+    // 清理资源
+    cuMemFree(dptr);
+    cuMemFree(d_results);
+    cuCtxDestroy(context);
+    close(fd_o);
+    close(fd_i);
+    free(h_data);
+    free(h_results);
+    return 0;
+}
+
+// 缓存一致性验证函数
+void verify_cache_consistency(int *gpu_ptr, CUstream stream) {
+    // 分配结果内存
+    CacheCheckResult *d_results;
+    cuMemAlloc((CUdeviceptr*)&d_results, sizeof(CacheCheckResult));
+
+    // 启动内核
+    dim3 blocks(1);
+    dim3 threads(1);
+    void *args[] = {&gpu_ptr, &d_results};
+    cuLaunchKernel(check_cache_consistency, 
+                   blocks.x, blocks.y, blocks.z,
+                   threads.x, threads.y, threads.z,
+                   0, stream, args, NULL);
+
+    // 等待内核完成
+    cuStreamSynchronize(stream);
+
+    // 检查结果
+    CacheCheckResult result;
+    cuMemcpyDtoH(&result, (CUdeviceptr)d_results, sizeof(CacheCheckResult));
+    if(!result.is_consistent) {
+        fprintf(stderr, "Cache inconsistency detected!\n");
+    }
+
+    cuMemFree((CUdeviceptr)d_results);
+}
+
+
+void checkError(CUresult status)
+{
+    if(status != CUDA_SUCCESS) {
+        const char *perrstr = 0;
+        CUresult ok = cuGetErrorString(status,&perrstr);
+        if(ok == CUDA_SUCCESS) {
+            if(perrstr) {
+                fprintf(stderr, "info: %s\n", perrstr);
+            } else {
+                fprintf(stderr, "info: unknown error\n");
+            }
+        }
+        exit(0);
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+bool wasError(CUresult status)
+{
+    if(status != CUDA_SUCCESS) {
+        const char *perrstr = 0;
+        CUresult ok = cuGetErrorString(status,&perrstr);
+        if(ok == CUDA_SUCCESS) {
+            if(perrstr) {
+                fprintf(stderr, "info: %s\n", perrstr);
+            } else {
+                fprintf(stderr, "info: unknown error\n");
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+//-----------------------------------------------------------------------------

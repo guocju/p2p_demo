@@ -1,0 +1,1 @@
+cmd_/home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/Module.symvers := sed 's/\.ko$$/\.o/' /home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/modules.order | scripts/mod/modpost -m -a  -o /home/jdrenjisuo/FPGATest/xdma2gpu/XDMA/linux-kernel/gpuctl/Module.symvers -e -i Module.symvers -i /usr/src/nvidia-560.35.03/Module.symvers   -T -
