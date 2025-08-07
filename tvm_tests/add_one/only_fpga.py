@@ -75,7 +75,7 @@ class TestFPGA:
 mod = TestFPGA
 target = [tvm.cpu(0), tvm.fpga(0)]
 vm = compile(mod, target)
-n=5
+n=25
 inp_numpy = np.empty((n,), dtype="uint8")
 inp_numpy.fill(2)
 inp = tvm.nd.array(inp_numpy, target[0])
