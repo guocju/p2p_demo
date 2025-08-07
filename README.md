@@ -35,6 +35,7 @@ sudo bash build.sh
 
 ```bash
 cd cag_relax/
+git switch feature/fpga
 # 如果不需要gpu, 修改config.cmake的USE_CUDA=OFF
 # 如果需要gpu, 修改config.cmake的USE_CUDA=ON
 cp cmake/config.cmake build/
