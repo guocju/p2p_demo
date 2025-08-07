@@ -10,6 +10,7 @@ long_align_val = 17
 short_align_val = 9
 target = tvm.target.Target("llvm")
 val_dtype = "float32"
+np.random.seed(42) # 设置种子，确保cpu和fpga生成同样的随机矩阵
 
 def calculate_row_number(indptr: np.ndarray, length_threshold: int,
                         short_align_val: int, long_align_val: int):

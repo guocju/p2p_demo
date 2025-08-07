@@ -33,6 +33,8 @@ sudo bash build.sh
 
 ## step 3 安装TVM环境
 
+安装tvm之前，需要在/cag_relax/3rdparty/dlpack/include/dlpack.h:91行加上kDLFPGA = 17
+
 ```bash
 cd cag_relax/
 git switch feature/fpga
@@ -64,3 +66,32 @@ cd tvm_tests/add_one
 python3 only_fpga.py
 ```
 
+## tvm 参数顺序
+
+```python
+@T.prim_func
+def add_one_fpga(
+	a_handle: T.handle,
+	x: T.int32,
+	out_handle: T.handle
+) -> None:
+	T.func_attr({
+		"global_symbol": "add_one_fpga",
+		"tir.noalias": True,
+		"target": fpga_target
+	})
+	n = T.int32()
+	A = T.match_buffer(a_handle, (n,), dtype="uint8")
+	Out = T.match_buffer(out_handle, (n,), dtype="uint8")
+	T.attr(T.target("fpga"), "target", 0)
+
+	for i in T.serial(0, n):
+		Out[i] = A[i] + x
+```
+以这个tir function为例，它有3个显式输入a_handle、x、out_handle和一个隐式输入n。
+
+在kernel下发的时候，tvm会对参数进行打包，重新排序。
+
+排序规则是先排handle类型，再排常数类型，类型内部再按照A-Z的首字母ASCII顺序排列。
+
+这个kernel最终参数的顺序就是a_handle, out_handle, n, x
