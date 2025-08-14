@@ -35,7 +35,7 @@ struct head_tail
 
 void memory_unmap()
 {
-  int fd_in = open("/dev/xdma0_c2h_1", O_WRONLY);
+  int fd_in = open("/dev/xdma0_c2h_0", O_WRONLY);
   ioctl(fd_in, IOCTL_XDMA_GPU_FREE);
 }
 
@@ -81,10 +81,24 @@ void rv_init()
   uint32_t read;
 
   std::cout << "rv_init()" << std::endl;
-  // stop riscv
+
+  write_reg(0x1c, 4, 0);
+  // XJTU PASSWD
+  // write_reg(0x210, 4, 0xf0165dc8);
+  // write_reg(0x214, 4, 0xbb855b3c);
+  // write_reg(0x218, 4, 0x01c64d27);
+  // write_reg(0x21c, 4, 0xeedaf635);
+  // write_reg(0x220, 4, 0x8cb2993e);
+
+  // PKU PASSWD
+  write_reg(0x210, 4, 0x2787ef21);
+  write_reg(0x214, 4, 0xf4acf97e);
+  write_reg(0x218, 4, 0x74d0fb43);
+  write_reg(0x21c, 4, 0xa823b9a6);
+  write_reg(0x220, 4, 0x255dedf7);
+
 
   std::cout << "start rv" << std::endl;
-  write_reg(0x1c, 4, 0);
 
   BUFFER rvcode_buffer = new_binary_from_file(WORKDIR "/../riscv/output/bin/swf_code.bin");
   write_plddr(DDR_RVCODE_BASE, rvcode_buffer.size, rvcode_buffer.data);
@@ -416,7 +430,7 @@ void fpgaLauchKernel(int *buffer_sizes, int *buffer_kinds, void **ptrs, int ptr_
     default:
       break;
     }
-    int fd_oo = open("/dev/xdma0_h2c_1", O_WRONLY);
+    int fd_oo = open("/dev/xdma0_h2c_0", O_WRONLY);
     pwrite(fd_oo, host_ddr, info_size, addr);
   }
   rv_launch_desc();

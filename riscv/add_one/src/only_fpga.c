@@ -93,13 +93,19 @@ void IP(uint32_t dst_lm_addr, uint32_t src_lm_addr, uint32_t SliceSize, uint32_t
     uint32_t slicesize = ((SliceSize + 63) / 64) * 64;
     uint32_t res_dst_lm_addr = dst_lm_addr >> 6;
     uint32_t res_src_lm_addr = src_lm_addr >> 6;
+
+    uint32_t data_npu_conv_fm = ((res_dst_lm_addr) & 0xFFFF) << 16 | ((res_src_lm_addr) & 0xFFFF);
+    uint32_t data_npu_conv_wbc = ((PlusNum) & 0xFFFF) << 16 | ((slicesize) & 0xFFFF);
+    uint32_t data_npu_ctrl = 0x1;
+
+    *(volatile uint32_t *)NPU_CONV_FM = data_npu_conv_fm;
+    *(volatile uint32_t *)NPU_CONV_WBC = data_npu_conv_wbc;
+    *(volatile uint32_t *)NPU_CTRL = data_npu_ctrl;
+
     KRNL_LOG_INFO(LOG_SYSTEM, "_____IP______");
     KRNL_LOG_INFO(LOG_SYSTEM, "dst lm addr : %08x, src lm addr : %08x", dst_lm_addr, src_lm_addr);
-    *(volatile uint32_t *)NPU_CONV_FM = ((res_dst_lm_addr) & 0xFFFF) << 16 | ((res_src_lm_addr) & 0xFFFF);
-    // KRNL_LOG_INFO(LOG_SYSTEM, "NPU CONV FM : %08x", *(volatile uint32_t*)NPU_CONV_FM);
-    *(volatile uint32_t *)NPU_CONV_WBC = ((PlusNum) & 0xFFFF) << 16 | ((slicesize) & 0xFFFF);
-    // KRNL_LOG_INFO(LOG_SYSTEM, "NPU CONV WBC : %08x", *(volatile uint32_t*)NPU_CONV_WBC);
-    *(volatile uint32_t *)NPU_CTRL = 0x1;
+    KRNL_LOG_INFO(LOG_SYSTEM, "NPU CONV FM : %08x", data_npu_conv_fm);
+    KRNL_LOG_INFO(LOG_SYSTEM, "NPU CONV WBC : %08x", data_npu_conv_wbc);
 }
 
 void wait_ip()
@@ -179,6 +185,8 @@ void p2p_demo()
     *pCmdStatus_0x08 = 1;
 
     KRNL_LOG_INFO(LOG_SYSTEM, "received start indication from host");
+    KRNL_LOG_INFO(LOG_SYSTEM, "12345678901234567890");
+    KRNL_LOG_INFO(LOG_SYSTEM, "12345678901234567890");
 
     all_proc_();
 

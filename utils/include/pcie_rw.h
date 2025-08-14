@@ -34,7 +34,6 @@
 #include <ctype.h>
 #include <termios.h>
 
-
 /* ltoh: little to host */
 /* htol: little to host */
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -51,8 +50,8 @@
 
 #define IMAGE_DEFAULT "./image_exp.jpg"
 #define VIDEO_STEAM_DEFAULT "./image_exp.mpg"
-#define DEVICE_H2C_DEFAULT "/dev/xdma0_h2c_1"
-#define DEVICE_C2H_DEFAULT "/dev/xdma0_c2h_1"
+#define DEVICE_H2C_DEFAULT "/dev/xdma0_h2c_0"
+#define DEVICE_C2H_DEFAULT "/dev/xdma0_c2h_0"
 #define DEVICE_CTRL_DEFAULT "/dev/xdma0_control"
 #define DEVICE_USR_DEFAULT "/dev/xdma0_user"
 #define SIZE_DEFAULT (32)
@@ -65,12 +64,11 @@
 		exit(1);                                                                                              \
 	} while (0)
 
-#define MAP_SIZE (1*1024*1024UL) //(32*1024*1024UL)
+#define MAP_SIZE (1 * 1024 * 1024UL) //(32*1024*1024UL)
 #define MAP_MASK (MAP_SIZE - 1)
 int pl_init();
-void write_bram_reg(uint64_t offset,size_t size,void * src);
-void read_bram_reg(uint64_t offset,size_t size,void * dest);
+void write_bram_reg(uint64_t offset, size_t size, void *src);
+void read_bram_reg(uint64_t offset, size_t size, void *dest);
 
-void write_plddr(uint64_t offset,size_t size,void * src);
-void read_plddr(uint64_t offset,size_t size,void * dest);
-
+void write_plddr(uint64_t offset, size_t size, void *src);
+void read_plddr(uint64_t offset, size_t size, void *dest);
