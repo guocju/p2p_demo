@@ -13,7 +13,8 @@ extern "C"
 #include "gpuctl.h"
 #include "p2p.h"
 
-#define DDR_RVCODE_BASE 0x10000000
+#define DDR_P2PRVCODE_BASE 0x10000000
+#define DDR_ACCRVCODE_BASE 0x10020000
 #define BRAM_SF_BASE 0x00000000
 
 extern struct AddrDesc stAddrDesc;
@@ -76,11 +77,11 @@ void write_reg_ddr(uint32_t addr, uint32_t len, uint32_t value)
   write_plddr(addr, len, &local_value);
 }
 
-void rv_init()
+void p2p_rv_init()
 {
   uint32_t read;
 
-  std::cout << "rv_init()" << std::endl;
+  std::cout << "p2p_rv_init()" << std::endl;
 
   write_reg(0x1c, 4, 0);
   // XJTU PASSWD
@@ -91,33 +92,66 @@ void rv_init()
   // write_reg(0x220, 4, 0x8cb2993e);
 
   // PKU PASSWD
-  write_reg(0x210, 4, 0x2787ef21);
-  write_reg(0x214, 4, 0xf4acf97e);
-  write_reg(0x218, 4, 0x74d0fb43);
-  write_reg(0x21c, 4, 0xa823b9a6);
-  write_reg(0x220, 4, 0x255dedf7);
+  // write_reg(0x210, 4, 0x2787ef21);
+  // write_reg(0x214, 4, 0xf4acf97e);
+  // write_reg(0x218, 4, 0x74d0fb43);
+  // write_reg(0x21c, 4, 0xa823b9a6);
+  // write_reg(0x220, 4, 0x255dedf7);
 
+  std::cout << "start p2p rv" << std::endl;
 
-  std::cout << "start rv" << std::endl;
-
-  BUFFER rvcode_buffer = new_binary_from_file(WORKDIR "/../riscv/output/bin/swf_code.bin");
-  write_plddr(DDR_RVCODE_BASE, rvcode_buffer.size, rvcode_buffer.data);
+  BUFFER rvcode_buffer = new_binary_from_file(WORKDIR "/../riscv/output/p2p/bin/swf_code.bin");
+  write_plddr(DDR_P2PRVCODE_BASE, rvcode_buffer.size, rvcode_buffer.data);
   // write_plddr(0x0000, 0x1000, rvcode_buffer.data);
   free(rvcode_buffer.data);
   std::cout << "write rvcode to " << std::showbase << std::hex
-            << DDR_RVCODE_BASE << " len:" << rvcode_buffer.size << std::endl;
+            << DDR_P2PRVCODE_BASE << " len:" << rvcode_buffer.size << std::endl;
 
-  std::cout << "start rv" << std::endl;
+  std::cout << "start p2p rv" << std::endl;
   write_reg(0x1c, 4, 1);
 
   read_bram_reg(0x00100, 4, &read);
-  std::cout << "read rv reg " << std::hex << read << std::endl;
+  std::cout << "read p2p rv reg " << std::hex << read << std::endl;
   read_bram_reg(0x00104, 4, &read);
   //   std::cout << "read rv reg " << std::hex << read << std::endl;
   read_bram_reg(0x00108, 4, &read);
   //   std::cout << "read rv reg " << std::hex << read << std::endl;
   read_bram_reg(0x0010c, 4, &read);
   //   std::cout << "read rv reg " << std::hex << read << std::endl;
+}
+
+void acc_rv_init()
+{
+  uint32_t read;
+
+  std::cout << "acc_rv_init()" << std::endl;
+
+  write_reg(0x1c | 0x30000, 4, 0);
+  // XJTU PASSWD
+  // write_reg(0x210, 4, 0xf0165dc8);
+  // write_reg(0x214, 4, 0xbb855b3c);
+  // write_reg(0x218, 4, 0x01c64d27);
+  // write_reg(0x21c, 4, 0xeedaf635);
+  // write_reg(0x220, 4, 0x8cb2993e);
+
+  // PKU PASSWD
+  // write_reg(0x210, 4, 0x2787ef21);
+  // write_reg(0x214, 4, 0xf4acf97e);
+  // write_reg(0x218, 4, 0x74d0fb43);
+  // write_reg(0x21c, 4, 0xa823b9a6);
+  // write_reg(0x220, 4, 0x255dedf7);
+
+  std::cout << "start acc rv" << std::endl;
+
+  BUFFER rvcode_buffer = new_binary_from_file(WORKDIR "/../riscv/output/acc/bin/swf_code.bin");
+  write_plddr(DDR_ACCRVCODE_BASE, rvcode_buffer.size, rvcode_buffer.data);
+  // write_plddr(0x0000, 0x1000, rvcode_buffer.data);
+  free(rvcode_buffer.data);
+  std::cout << "write acc rvcode to " << std::showbase << std::hex
+            << DDR_ACCRVCODE_BASE << " len:" << rvcode_buffer.size << std::endl;
+
+  std::cout << "start acc rv" << std::endl;
+  write_reg(0x1c | 0x30000, 4, 1);
 }
 
 void assign_addr_desc(uint32_t group_num, uint32_t desc_num)
@@ -202,102 +236,89 @@ int transfer_desc(CUdeviceptr head_ptr, CUdeviceptr tail_ptr,
                   CUdeviceptr *ptr_arr, uint32_t ptr_num, size_t gpu_bank_size,
                   int fd_i, int fd_o)
 {
-  // if not start rv, no rv_init()
-  pl_init();
-  rv_init();
-
-  // every group is one of the gpu buffers
-  uint32_t map_num = ((gpu_bank_size) / (PAGE_SIZE));
-  //   std::cout << map_num << std::endl;
-  //   std::cout << gpu_bank_size << std::endl;
-  //   std::cout << PAGE_SIZE << std::endl;
-  assign_addr_desc(ptr_num, map_num);
-
-  write_reg(stAddrDesc.group_num, 4, ptr_num);
-
-  // map head and tail
-
+  p2p_rv_init();
+  // the info address in plddr
+  uint32_t plddr = 0x00000000;
+  AddrDesc *addr_desc = new AddrDesc;
+  size_t transf_size = sizeof(AddrDesc);
   gpudma_lock_t lock;
-  // head
-  lock.addr = head_ptr;
-  lock.size = PAGE_SIZE;
-  lock.dma_addrs = (uint64_t *)malloc(1 * sizeof(uint64_t));
-  lock.dma_lengths = (size_t *)malloc(1 * sizeof(size_t));
+  // the num of gpu bufs
+  uint32_t len = ptr_num;
+  size_t size = gpu_bank_size;
+  CUdeviceptr cu_ptr;
+  uint32_t num_desc;
 
-  ioctl(fd_o, IOCTL_XDMA_GPU_BYP, &lock);
-
-  struct head_tail *h_t_arr =
-      (struct head_tail *)malloc(2 * sizeof(struct head_tail));
-  h_t_arr[0].lo = lock.dma_addrs[0];
-  h_t_arr[0].hi = (uint32_t)(lock.dma_addrs[0] >> 32);
-  h_t_arr[0].len = lock.dma_lengths[0];
-
-  write_reg(stAddrDesc.head_lo, 4, h_t_arr[0].lo);
-  write_reg(stAddrDesc.head_hi, 4, h_t_arr[0].hi);
-
-  free(lock.dma_addrs);
-  free(lock.dma_lengths);
-
-  // tail
-  lock.addr = tail_ptr;
-  lock.size = PAGE_SIZE;
-  lock.dma_addrs = (uint64_t *)malloc(1 * sizeof(uint64_t));
-  lock.dma_lengths = (size_t *)malloc(1 * sizeof(size_t));
-
-  ioctl(fd_o, IOCTL_XDMA_GPU_BYP, &lock);
-
-  h_t_arr[1].lo = lock.dma_addrs[0];
-  h_t_arr[1].hi = (uint32_t)(lock.dma_addrs[0] >> 32);
-  h_t_arr[1].len = lock.dma_lengths[0];
-  write_reg(stAddrDesc.tail_lo, 4, h_t_arr[1].lo);
-  write_reg(stAddrDesc.tail_hi, 4, h_t_arr[1].hi);
-
-  free(lock.dma_addrs);
-  free(lock.dma_lengths);
-
-  uint32_t offset = 0;
-  offset = (5 + ptr_num) * 4;
-
-  // map the gpu buffers
-  for (int i = 0; i < ptr_num; i++)
+  addr_desc->group_num = len;
+  std::cout << "group num:" << len << std::endl;
+  for (int i = 0; i < len; i++)
   {
-    lock.addr = ptr_arr[i];
-    lock.size = gpu_bank_size;
-    lock.dma_addrs = (uint64_t *)malloc(map_num * sizeof(uint64_t));
-    lock.dma_lengths = (size_t *)malloc(map_num * sizeof(size_t));
+    cu_ptr = ptr_arr[i];
+    num_desc = (size / (PAGE_SIZE));
+    lock.dma_addrs = new uint64_t[num_desc];
+    lock.dma_lengths = new size_t[num_desc];
+    lock.addr = cu_ptr;
+    lock.size = size;
+    std::cout << "size" << size << std::endl;
+    lock.byp = 1;
 
     ioctl(fd_i, IOCTL_XDMA_GPU_BYP, &lock);
 
-    write_reg(stAddrDesc.group_offset[i], 4, offset);
-    offset += 4 + 12 * map_num;
-
-    write_reg(stAddrDesc.group[i].desc_num, 4, map_num);
-    for (int j = 0; j < map_num; j++)
+    addr_desc->group[i].desc_num = num_desc;
+    std::cout << "group " << i << "desc num " << num_desc << std::endl;
+    for (int j = 0; j < num_desc; j++)
     {
-      write_reg(stAddrDesc.group[i].desc_list[j].remote_addr_lo, 4,
-                lock.dma_addrs[j]);
-      write_reg(stAddrDesc.group[i].desc_list[j].remote_addr_hi, 4,
-                lock.dma_addrs[j] >> 32);
-      write_reg(stAddrDesc.group[i].desc_list[j].len, 4, lock.dma_lengths[j]);
+      addr_desc->group[i].desc_list[j].remote_addr_lo = (lock.dma_addrs[j] & 0xFFFFFFFF);
+      addr_desc->group[i].desc_list[j].remote_addr_hi = (lock.dma_addrs[j] >> 32);
+      addr_desc->group[i].desc_list[j].len = lock.dma_lengths[j];
+      std::cout << "dma address " << addr_desc->group[i].desc_list[j].remote_addr_hi
+                << " " << addr_desc->group[i].desc_list[j].remote_addr_lo << std::endl;
+      // std::cout << "dma length " << addr_desc->group[i].desc_list[j].len << std::endl;
+      std::cout << "dma length " << lock.dma_lengths[j] << std::endl;
     }
 
-    free(lock.dma_addrs);
-    free(lock.dma_lengths);
+    delete[] lock.dma_addrs;
+    delete[] lock.dma_lengths;
   }
 
-  free(h_t_arr);
+  lock.addr = head_ptr;
+  lock.size = PAGE_SIZE;
+  lock.dma_addrs = new uint64_t[1];
+  lock.dma_lengths = new size_t[1];
 
-  // strart byp
-  rv_clear_sr();
-  rv_launch_desc();
-  //   std::cout << "start byp" << std::endl;
+  ioctl(fd_o, IOCTL_XDMA_GPU_BYP, &lock);
+
+  addr_desc->head_lo = (lock.dma_addrs[0] & 0xFFFFFFFF);
+  addr_desc->head_hi = (lock.dma_addrs[0] >> 32);
+  std::cout << "head dma address " << addr_desc->head_hi
+            << " " << addr_desc->head_lo << std::endl;
+
+  delete[] lock.dma_addrs;
+  delete[] lock.dma_lengths;
+
+  lock.addr = tail_ptr;
+  lock.size = PAGE_SIZE;
+  lock.dma_addrs = new uint64_t[1];
+  lock.dma_lengths = new size_t[1];
+
+  ioctl(fd_o, IOCTL_XDMA_GPU_BYP, &lock);
+
+  addr_desc->tail_lo = (lock.dma_addrs[0] & 0xFFFFFFFF);
+  addr_desc->tail_hi = (lock.dma_addrs[0] >> 32);
+  std::cout << "tail dma address " << addr_desc->tail_hi
+            << " " << addr_desc->tail_lo << std::endl;
+
+  delete[] lock.dma_addrs;
+  delete[] lock.dma_lengths;
+
+  write_plddr(plddr, transf_size, addr_desc);
+
+  delete addr_desc;
   return 0;
 }
 
 void fpgaLauchKernel(int *buffer_sizes, int *buffer_kinds, void **ptrs, int ptr_num)
 {
-  pl_init();
-  rv_init();
+  acc_rv_init();
   uint32_t addr = 0x20000000;
   uint64_t *host_ddr = (uint64_t *)malloc(2 * 1024);
   size_t info_size = 0;
