@@ -11,6 +11,7 @@
 #define _BSD_SOURCE
 #define _XOPEN_SOURCE 500
 #include "../include/pcie_rw.h"
+#include "../include/p2p.h"
 
 #include <assert.h>
 #include <byteswap.h>

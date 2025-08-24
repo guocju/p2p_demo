@@ -67,9 +67,9 @@ class TestP2P_2:
             "target": fpga_target
         })
         n = T.int32()
-        A = T.match_buffer(a_handle, (n,), dtype="int32")
+        A = T.match_buffer(a_handle, (n,), dtype="uint8")
         ptr_array_buffer = T.match_buffer(ptr_array, (8,), dtype="uint64")
-        Out = T.match_buffer(out_handle, (n,), dtype="int32")
+        Out = T.match_buffer(out_handle, (n,), dtype="uint8")
         bank = T.allocate([8*65536], "uint8", "global")
         bank_buffer = T.Buffer((8, 65536,), dtype="uint8", data=bank, scope="global") # 8*64KB DDR bank
         
@@ -99,8 +99,8 @@ class TestP2P_2:
             "target": fpga_target
         })
         n = T.int32()
-        A = T.match_buffer(a_handle, (n,), dtype="int32")
-        Out = T.match_buffer(out_handle, (n,), dtype="int32")
+        A = T.match_buffer(a_handle, (n,), dtype="uint8")
+        Out = T.match_buffer(out_handle, (n,), dtype="uint8")
         T.attr(T.target("fpga"), "target", 0)
 
         for i in T.serial(0, n):
@@ -117,22 +117,23 @@ class TestP2P_2:
     #     for i in T.thread_binding(n, thread="threadIdx.x"):
     #         B[i] = A[i] + x
     
-    @T.prim_func(private=True)
-    def add_int32(a: T.int32, b: T.int32) -> T.int32:
-        return a + b
+    # @T.prim_func(private=True)
+    # def add_int32(a: T.int32, b: T.int32) -> T.int32:
+    #     # T.func_attr({"target": T.target("cuda")})
+    #     return a + b
     
     @T.prim_func
     def add_int_gpu(a_handle: T.handle("void"), x: T.int32, b_handle: T.handle("void"), n: T.int32):
-        T.func_attr({"target": T.target("cuda", host=gpu_target)})
-        a_val = T.decl_buffer((n,), "int32", data=a_handle)
-        b_val = T.decl_buffer((n,), "int32", data=b_handle)
+        T.func_attr({"target": T.target("cuda", host="cuda"), "calling_conv": 2})
+        a_val = T.decl_buffer((n,), "uint8", data=a_handle)
+        b_val = T.decl_buffer((n,), "uint8", data=b_handle)
         threadIdx = T.launch_thread("threadIdx.x", n)
         with T.block("vadds"):
             b_val[threadIdx] = a_val[threadIdx] + x
             
     @T.prim_func
     def parse_header(header: T.handle("void")):
-        T.func_attr({"target": T.target("cuda", host=gpu_target)})
+        T.func_attr({"target": T.target("cuda", host="cuda"), "calling_conv": 2})
         header_uint64 = T.Buffer((8*1024,), "uint64", data=header)
         header_uint32 = T.Buffer((16*1024,), "uint32", data=header)
         header_uint16 = T.Buffer((32*1024,), "uint16", data=header)
@@ -140,23 +141,23 @@ class TestP2P_2:
         with T.block("parse_header"):
             a = T.reinterpret("handle", header_uint64[1])
             byte_n = T.reinterpret("int32", header_uint32[4])
-            n = byte_n / T.int32(4)
+            n = tvm.tir.div(byte_n, T.int32(4))
             b = T.reinterpret("handle", header_uint64[3])
             x = T.reinterpret("int32", header_uint32[8])
             TestP2P_2.add_int_gpu(a, x, b, n)
                     
     @T.prim_func
     def gather(buffer: T.handle("void"), lv: T.handle("void"), n: T.int32, counter: T.int32):
-        T.func_attr({"target": T.target("cuda", host=gpu_target)})
-        buffer_val = T.decl_buffer((n,), "int32", data=buffer)
-        lv_val = T.decl_buffer((n+counter,), "int32", data=lv)
+        T.func_attr({"target": T.target("cuda", host="cuda"), "calling_conv": 2})
+        buffer_val = T.decl_buffer((n,), "uint8", data=buffer)
+        lv_val = T.decl_buffer((n+counter,), "uint8", data=lv)
         threadIdx = T.launch_thread("threadIdx.x", n)
         with T.block("gather"):
             lv_val[counter + threadIdx] = buffer_val[threadIdx]
             
     @T.prim_func
     def parse_gather(buffer: T.handle("void"), lv: T.handle("void"), counter: T.int32):
-        T.func_attr({"target": T.target("cuda", host=gpu_target)})
+        T.func_attr({"target": T.target("cuda", host="cuda"), "calling_conv": 2})
         buffer_uint64 = T.decl_buffer((8*1024,), "uint64", data=buffer)
         buffer_uint32 = T.decl_buffer((16*1024,), "uint32", data=buffer)
         buffer_uint16 = T.decl_buffer((32*1024,), "uint16", data=buffer)
@@ -165,14 +166,14 @@ class TestP2P_2:
         with T.block("parse_gather"):
             a = T.reinterpret("handle", buffer_uint64[1])
             byte_n = T.reinterpret("int32", buffer_uint32[4])
-            n = byte_n / T.int32(4)
+            n = tvm.tir.div(byte_n, T.int32(4))
             b = T.reinterpret("handle", buffer_uint64[3])
             x = T.reinterpret("int32", buffer_uint32[8])
             TestP2P_2.gather(b, lv, n, counter)
     
     @T.prim_func
     def increase_counter(counter: T.int32, buffer: T.handle("void")):
-        T.func_attr({"target": T.target("cuda", host=gpu_target)})
+        T.func_attr({"target": T.target("cuda", host="cuda"), "calling_conv": 2})
         buffer_uint64 = T.decl_buffer((8*1024,), "uint64", data=buffer)
         buffer_uint32 = T.decl_buffer((16*1024,), "uint32", data=buffer)
         buffer_uint16 = T.decl_buffer((32*1024,), "uint16", data=buffer)
@@ -181,18 +182,19 @@ class TestP2P_2:
         with T.block("increase_counter"):
             a = T.reinterpret("handle", buffer_uint64[1])
             byte_n = T.reinterpret("int32", buffer_uint32[4])
-            n = byte_n / T.int32(4)
+            n = tvm.tir.div(byte_n, T.int32(4))
             b = T.reinterpret("handle", buffer_uint64[3])
             x = T.reinterpret("int32", buffer_uint32[8])
-            counter = TestP2P_2.add_int32(counter, n)
+            # counter = TestP2P_2.add_int32(counter, n)
+            counter = counter + n
     
     @T.prim_func
     def add_one_gpu_bank(head:T.handle, tail:T.handle, banks:T.handle, a_handle: T.handle, x:T.int32, b_handle: T.handle) -> None:
-        T.func_attr({"global_symbol": "add_one_gpu", "tir.noalias": True, "target":gpu_target})
+        T.func_attr({"global_symbol": "add_one_gpu_bank", "tir.noalias": True, "target":gpu_target})
 
         # Alloc buffer for return tensor
         n = T.int32()
-        B = T.match_buffer(b_handle, (n,), dtype="int32")
+        B = T.match_buffer(b_handle, (n,), dtype="uint8")
         
         head_buffer = T.match_buffer(head, (16384,), dtype="int32")
         tail_buffer = T.match_buffer(tail, (16384,), dtype="int32")
@@ -202,6 +204,8 @@ class TestP2P_2:
         blockIdx_x = T.launch_thread("blockIdx.x", 1)
         threadIdx_x = T.launch_thread("threadIdx.x", 1)
         with T.block("while_loop"):
+            T.reads(head_buffer[:], tail_buffer[:], bank_buffer[:,:])
+            T.writes(head_buffer[:], tail_buffer[:], bank_buffer[:,:])
             counter = T.int32(0)
             over = T.uint8(0)
             while over == 0: # FPGA terminates by setting tail to -1
@@ -226,7 +230,7 @@ class TestP2P_2:
             ptr_array_buffer[i] = T.reinterpret("uint64", T.address_of(bank_buffer[i, 0]))
     
     @R.function(pure=False)
-    def foo(A: R.Tensor(("len",), dtype="int32")) -> R.Tensor(("len",), dtype="int32"):
+    def foo(A: R.Tensor(("len",), dtype="uint8")) -> R.Tensor(("len",), dtype="uint8"):
         R.func_attr({"global_symbol": "foo"})
         len = T.int64()
         
@@ -247,14 +251,14 @@ class TestP2P_2:
         out = R.call_tir(
             TestP2P_2.slice_add_one_fpga,               
             (data_a, inp_x, inp_y, ptr_array_2, slice_len),
-            out_sinfo=R.Tensor((len,), "int32", vdevice="fpga")
+            out_sinfo=R.Tensor((len,), "uint8", vdevice="fpga")
         )
         gpu_inp = R.to_vdevice(out, "cuda")
         
         res = R.call_tir(
             TestP2P_2.add_one_gpu_bank, 
             (head, tail, gpu_banks, gpu_inp, inp_y),
-            out_sinfo=R.Tensor((len,), "int32", vdevice="cuda")
+            out_sinfo=R.Tensor((len,), "uint8", vdevice="cuda")
         )
         _ = R.call_packed("vm.builtin.p2p.unmap_gpu_memory", head, tail, gpu_banks)
         return res
@@ -263,7 +267,7 @@ class TestP2P_2:
 mod = TestP2P_2
 target = [tvm.cpu(0), tvm.fpga(0), tvm.cuda(0)]
 vm = compile(mod, target)
-inp_numpy = np.empty((n,), dtype="int32")
+inp_numpy = np.empty((n,), dtype="uint8")
 inp_numpy.fill(2)
 inp = tvm.nd.array(inp_numpy, target[0])
 res = vm["foo"](inp)
